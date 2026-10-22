@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Remote Support — Share Your Screen</title>
+<link rel="manifest" href="manifest-monitor.json">
+<meta name="theme-color" content="#0f1115">
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #181b22;
+    --text: #f1f3f6;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --danger: #ff4d4f;
+    --ok: #3ecf8e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  p.sub { color: var(--muted); margin-top: 0; text-align: center; max-width: 360px; }
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 20px;
+    width: 100%;
+    max-width: 420px;
+    margin-top: 12px;
+  }
+  input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #2a2f3a;
+    background: #10131a;
+    color: var(--text);
+    font-size: 1.1rem;
+    text-align: center;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  button {
+    width: 100%;
+    padding: 14px;
+    border-radius: 8px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-secondary { background: #262b36; color: var(--text); }
+  .btn-danger { background: var(--danger); color: white; }
+  .hidden { display: none !important; }
+  #shareBanner {
+    width: 100%;
+    max-width: 420px;
+    background: var(--danger);
+    color: white;
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.95rem;
+  }
+  #shareBanner button {
+    width: auto;
+    margin: 0;
+    padding: 8px 14px;
+    background: rgba(0,0,0,0.25);
+    color: white;
+  }
+  #codeDisplay {
+    font-size: 1.6rem;
+    letter-spacing: 3px;
+    text-align: center;
+    display: block;
+    margin: 8px 0 16px;
+    color: var(--accent);
+  }
+  #previewWrap {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    margin-top: 16px;
+  }
+  video#localPreview {
+    width: 100%;
+    border-radius: 12px;
+    background: black;
+    display: block;
+  }
+  #pointerDot {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(79,140,255,0.55);
+    border: 2px solid #4f8cff;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    display: none;
+    transition: left 0.08s linear, top 0.08s linear;
+  }
+  .pulse {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: white;
+    margin-right: 8px;
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  label.remember {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: -4px 0 14px;
+  }
+  #incomingRequest {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 50;
+  }
+  #incomingRequest .box {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+  }
+  #incomingRequest .box button { margin-top: 8px; }
+  #statusLine {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  #statusLine.ok { color: var(--ok); }
+  #statusLine.bad { color: var(--danger); }
+  #iosTip {
+    width: 100%;
+    max-width: 420px;
+    background: var(--card);
+    border: 1px solid #2a2f3a;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  #iosTip button { width: auto; margin: 0; padding: 6px 10px; background: #262b36; color: var(--text); font-size: 0.8rem; }
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #262b36;
+    color: var(--text);
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    max-width: 90%;
+    text-align: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+  <div id="toast"></div>
+
+  <div id="shareBanner" class="hidden">
+    <span><span class="pulse"></span>You're sharing your <b id="shareType">screen</b> with your helper.</span>
+    <button id="stopBtn">Stop</button>
+  </div>
+
+  <button id="installBtn" class="btn-secondary hidden" style="max-width:420px;margin-bottom:12px;">📲 Install App</button>
+  <div id="iosTip" class="hidden">
+    <span>On iPhone: tap the Share icon, then "Add to Home Screen" to install this.</span>
+    <button id="iosTipDismiss">Got it</button>
+  </div>
+
+  <div id="setup" class="card">
+    <h1>Remote Support</h1>
+    <p class="sub">Create a session and send the code to the person helping you, or enter a code they gave you.</p>
+    <input id="sessionCodeInput" placeholder="CODE (optional)" />
+    <label class="remember"><input type="checkbox" id="rememberCheck" checked> Remember this on this device, so I don't re-enter a code next time</label>
+    <button class="btn-primary" id="createBtn">Create New Session</button>
+    <button class="btn-secondary" id="joinBtn">Use Entered Code</button>
+  </div>
+
+  <div id="incomingRequest" class="hidden">
+    <div class="box">
+      <p id="requestText" style="margin-top:0;">Someone wants to connect.</p>
+      <button class="btn-primary" id="acceptScreenBtn">Accept &amp; Share Screen</button>
+      <button class="btn-secondary" id="acceptFrontBtn">Accept &amp; Share Front Camera</button>
+      <button class="btn-secondary" id="acceptBackBtn">Accept &amp; Share Back Camera</button>
+      <button class="btn-danger" id="declineBtn">Decline</button>
+    </div>
+  </div>
+
+  <div id="controls" class="card hidden">
+    <p class="sub" style="margin-bottom:0;">Give this code to your helper:</p>
+    <span id="codeDisplay"></span>
+    <div id="statusLine"></div>
+    <button class="btn-primary" id="shareScreenBtn">📺 Share My Screen</button>
+    <button class="btn-secondary" id="shareCameraFrontBtn">🤳 Share Front Camera</button>
+    <button class="btn-secondary" id="shareCameraBackBtn">📷 Share Back Camera</button>
+    <button class="btn-secondary hidden" id="reconnectBtn">🔄 Reconnect</button>
+    <div id="previewWrap">
+      <video id="localPreview" autoplay muted playsinline></video>
+      <div id="pointerDot"></div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-database-compat.js"></script>
+<script>
+  // === PASTE YOUR FIREBASE CONFIG HERE (same one used in viewer.html) ===
+  const firebaseConfig = {
+    apiKey: "AIzaSyDplr8vKCcDgDkUMopxchzwMRWXZHBopoA",
+    authDomain: "watch-b1d8f.firebaseapp.com",
+    databaseURL: "PASTE_YOUR_REALTIME_DATABASE_URL_HERE", // from Realtime Database page, e.g. https://watch-b1d8f-default-rtdb.firebaseio.com
+    projectId: "watch-b1d8f",
+    storageBucket: "watch-b1d8f.firebasestorage.app",
+    messagingSenderId: "971626937343",
+    appId: "1:971626937343:web:c3509d2e6645924515c5ca"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // ---------- toast (replaces alert()) ----------
+  let toastTimer = null;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+  }
+
+  // ---------- install prompt (Android/desktop) ----------
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('installBtn').classList.remove('hidden');
+  });
+  document.getElementById('installBtn').onclick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('installBtn').classList.add('hidden');
+  };
+  window.addEventListener('appinstalled', () => {
+    document.getElementById('installBtn').classList.add('hidden');
+  });
+
+  // ---------- iOS install fallback (beforeinstallprompt doesn't exist on iOS) ----------
+  function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream; }
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  if (isIOS() && !isStandalone && !localStorage.getItem('rs_iosTipDismissed')) {
+    document.getElementById('iosTip').classList.remove('hidden');
+  }
+  document.getElementById('iosTipDismiss').onclick = () => {
+    localStorage.setItem('rs_iosTipDismissed', '1');
+    document.getElementById('iosTip').classList.add('hidden');
+  };
+
+  let sessionId = null;
+  let pc = null;
+  let localStream = null;
+  let lastShareFn = null;
+  let micPc = null;
+
+  // STUN handles most connections; the TURN entries are a fallback for
+  // networks that block direct peer-to-peer (corporate wifi, strict NAT).
+  // These are free public demo TURN credentials (Open Relay) — fine for
+  // personal use; swap in your own for anything heavier.
+  const servers = {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+      { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+      { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
+    ]
+  };
+
+  function genCode() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
+  }
+
+  document.getElementById('createBtn').onclick = () => {
+    sessionId = genCode();
+    startSession();
+  };
+  document.getElementById('joinBtn').onclick = () => {
+    const v = document.getElementById('sessionCodeInput').value.trim().toUpperCase();
+    if (!v) return toast('Enter a code first, or tap "Create New Session".');
+    sessionId = v;
+    startSession();
+  };
+
+  function startSession() {
+    if (document.getElementById('rememberCheck').checked) {
+      localStorage.setItem('rs_sessionId', sessionId);
+    }
+    document.getElementById('setup').classList.add('hidden');
+    document.getElementById('controls').classList.remove('hidden');
+    document.getElementById('codeDisplay').textContent = sessionId;
+    const sessionRef = db.ref('sessions/' + sessionId);
+    sessionRef.set({ status: 'waiting', createdAt: Date.now() });
+    // If this tab closes or loses connection, Firebase cleans up the
+    // session automatically so stale codes don't linger.
+    sessionRef.onDisconnect().remove();
+    listenForControl();
+    listenForRequests();
+    listenForMicOffer();
+    listenForPointer();
+  }
+
+  // Auto-resume a remembered session so the setup screen can be skipped next time.
+  // This only restores the code itself — every connect request below still pops
+  // a visible, tap-to-accept prompt. Nothing shares automatically.
+  const remembered = localStorage.getItem('rs_sessionId');
+  if (remembered) {
+    sessionId = remembered;
+    document.getElementById('setup').classList.add('hidden');
+    document.getElementById('controls').classList.remove('hidden');
+    document.getElementById('codeDisplay').textContent = sessionId;
+    const sessionRef = db.ref('sessions/' + sessionId);
+    sessionRef.update({ status: 'waiting' });
+    sessionRef.onDisconnect().remove();
+    listenForControl();
+    listenForRequests();
+    listenForMicOffer();
+    listenForPointer();
+  }
+
+  // Shows a visible, must-tap popup whenever the viewer asks to connect.
+  // There is no path in this app that starts sharing without this tap.
+  function listenForRequests() {
+    db.ref('sessions/' + sessionId + '/request').on('value', (snap) => {
+      const req = snap.val();
+      if (req && req.pending) {
+        document.getElementById('requestText').textContent =
+          (req.from || 'Your helper') + ' wants to connect. Choose what to share, or decline.';
+        document.getElementById('incomingRequest').classList.remove('hidden');
+      } else {
+        document.getElementById('incomingRequest').classList.add('hidden');
+      }
+    });
+  }
+  function clearRequest() {
+    db.ref('sessions/' + sessionId + '/request').set({ pending: false });
+    document.getElementById('incomingRequest').classList.add('hidden');
+  }
+  document.getElementById('acceptScreenBtn').onclick = () => { clearRequest(); document.getElementById('shareScreenBtn').click(); };
+  document.getElementById('acceptFrontBtn').onclick = () => { clearRequest(); startCamera('user'); };
+  document.getElementById('acceptBackBtn').onclick = () => { clearRequest(); startCamera('environment'); };
+  document.getElementById('declineBtn').onclick = clearRequest;
+
+  function setStatus(text, cls) {
+    const el = document.getElementById('statusLine');
+    el.textContent = text;
+    el.className = cls || '';
+  }
+
+  async function setupPeerConnection() {
+    pc = new RTCPeerConnection(servers);
+    const callerCandidates = db.ref('sessions/' + sessionId + '/callerCandidates');
+    pc.onicecandidate = (e) => {
+      if (e.candidate) callerCandidates.push(e.candidate.toJSON());
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        setStatus('Connected', 'ok');
+        document.getElementById('reconnectBtn').classList.add('hidden');
+      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        setStatus('Connection lost', 'bad');
+        document.getElementById('reconnectBtn').classList.remove('hidden');
+      } else {
+        setStatus('Connecting…');
+      }
+    };
+  }
+
+  async function shareStream(stream, label) {
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
+    if (pc) pc.close();
+    await setupPeerConnection();
+
+    localStream = stream;
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+    document.getElementById('localPreview').srcObject = stream;
+
+    document.getElementById('shareBanner').classList.remove('hidden');
+    document.getElementById('shareType').textContent = label;
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await db.ref('sessions/' + sessionId).update({
+      offer: { type: offer.type, sdp: offer.sdp },
+      status: 'offering',
+      answer: null
+    });
+
+    db.ref('sessions/' + sessionId + '/answer').on('value', async (snap) => {
+      const data = snap.val();
+      if (data && pc.signalingState !== 'stable') {
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+      }
+    });
+
+    db.ref('sessions/' + sessionId + '/calleeCandidates').on('child_added', (snap) => {
+      pc.addIceCandidate(new RTCIceCandidate(snap.val())).catch(()=>{});
+    });
+
+    stream.getVideoTracks()[0].onended = stopSharing;
+  }
+
+  document.getElementById('shareScreenBtn').onclick = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      // Screen capture rarely includes mic audio by default, so add it as a
+      // separate track when available — lets your helper hear you talk
+      // while watching your screen. If mic access is denied, screen share
+      // still proceeds without audio.
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStream.getAudioTracks().forEach(t => stream.addTrack(t));
+      } catch (micErr) { console.log('Mic not added to screen share:', micErr.message); }
+      lastShareFn = () => document.getElementById('shareScreenBtn').click();
+      await shareStream(stream, 'screen');
+    } catch (err) { console.log('Screen share cancelled:', err.message); }
+  };
+  document.getElementById('shareCameraFrontBtn').onclick = () => startCamera('user');
+  document.getElementById('shareCameraBackBtn').onclick = () => startCamera('environment');
+  document.getElementById('reconnectBtn').onclick = () => { if (lastShareFn) lastShareFn(); };
+
+  async function startCamera(facingMode) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: true });
+      lastShareFn = () => startCamera(facingMode);
+      await shareStream(stream, facingMode === 'user' ? 'front camera' : 'back camera');
+    } catch (err) { toast('Could not access camera: ' + err.message); }
+  }
+
+  // Lets the viewer request a camera switch remotely — this device still has to
+  // already be in an active, consented session for the request to do anything.
+  function listenForControl() {
+    db.ref('sessions/' + sessionId + '/control').on('value', (snap) => {
+      const cmd = snap.val();
+      if (!cmd) return;
+      if (cmd === 'front') startCamera('user');
+      if (cmd === 'back') startCamera('environment');
+      if (cmd === 'screen') document.getElementById('shareScreenBtn').click();
+    });
+  }
+
+  // ---------- two-way audio: viewer's mic -> you (separate connection) ----------
+  function listenForMicOffer() {
+    db.ref('sessions/' + sessionId + '/mic/offer').on('value', async (snap) => {
+      const offer = snap.val();
+      if (!offer) return;
+      if (micPc) micPc.close();
+      micPc = new RTCPeerConnection(servers);
+      let remoteAudio = document.getElementById('remoteMicAudio');
+      if (!remoteAudio) {
+        remoteAudio = document.createElement('audio');
+        remoteAudio.id = 'remoteMicAudio';
+        remoteAudio.autoplay = true;
+        document.body.appendChild(remoteAudio);
+      }
+      micPc.ontrack = (e) => { remoteAudio.srcObject = e.streams[0]; };
+      micPc.onicecandidate = (e) => {
+        if (e.candidate) db.ref('sessions/' + sessionId + '/mic/calleeCandidates').push(e.candidate.toJSON());
+      };
+      await micPc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await micPc.createAnswer();
+      await micPc.setLocalDescription(answer);
+      await db.ref('sessions/' + sessionId + '/mic').update({ answer: { type: answer.type, sdp: answer.sdp } });
+      db.ref('sessions/' + sessionId + '/mic/callerCandidates').on('child_added', (c) => {
+        micPc.addIceCandidate(new RTCIceCandidate(c.val())).catch(()=>{});
+      });
+    });
+  }
+
+  // ---------- remote pointer: shows where your helper is pointing, on your own preview ----------
+  // Note: this only overlays on the small preview box in this page — it
+  // cannot draw on your actual desktop/apps, since no browser page can
+  // paint over the rest of your screen.
+  function listenForPointer() {
+    db.ref('sessions/' + sessionId + '/pointer').on('value', (snap) => {
+      const p = snap.val();
+      const dot = document.getElementById('pointerDot');
+      if (p && p.active) {
+        dot.style.left = (p.x * 100) + '%';
+        dot.style.top = (p.y * 100) + '%';
+        dot.style.display = 'block';
+      } else {
+        dot.style.display = 'none';
+      }
+    });
+  }
+
+  function stopSharing() {
+    if (localStream) localStream.getTracks().forEach(t => t.stop());
+    if (pc) pc.close();
+    if (micPc) micPc.close();
+    document.getElementById('shareBanner').classList.add('hidden');
+    document.getElementById('localPreview').srcObject = null;
+    document.getElementById('reconnectBtn').classList.add('hidden');
+    setStatus('');
+    if (sessionId) db.ref('sessions/' + sessionId).update({ status: 'ended', offer: null, answer: null });
+  }
+  document.getElementById('stopBtn').onclick = stopSharing;
+</script>
+</body>
+</html>

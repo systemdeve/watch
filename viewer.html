@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Remote Support Viewer</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1115">
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #181b22;
+    --text: #f1f3f6;
+    --muted: #9aa3b2;
+    --accent: #4f8cff;
+    --danger: #ff4d4f;
+    --ok: #3ecf8e;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  #join {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; text-align: center; }
+  p.sub { color: var(--muted); text-align: center; max-width: 320px; margin-top: 4px; }
+  input {
+    width: 100%;
+    max-width: 320px;
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid #2a2f3a;
+    background: #10131a;
+    color: var(--text);
+    font-size: 1.2rem;
+    text-align: center;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin: 16px 0;
+  }
+  button {
+    padding: 14px 18px;
+    border-radius: 8px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: white; width: 100%; max-width: 320px; }
+  .hidden { display: none !important; }
+
+  #iosTip {
+    width: 100%;
+    max-width: 320px;
+    background: var(--card);
+    border: 1px solid #2a2f3a;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  #iosTip button { width: auto; margin: 0; padding: 6px 10px; background: #262b36; color: var(--text); font-size: 0.78rem; }
+
+  #viewArea { display: flex; flex-direction: column; height: 100vh; }
+  #remoteVideoWrap { position: relative; flex: 1; background: black; }
+  #remoteVideo { width: 100%; height: 100%; object-fit: contain; display: block; }
+  #controlBar {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    background: var(--card);
+    flex-wrap: wrap;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  #controlBar button {
+    flex: 1;
+    min-width: 70px;
+    background: #262b36;
+    color: var(--text);
+    font-size: 0.8rem;
+    padding: 12px 6px;
+  }
+  #disconnectBtn { background: var(--danger) !important; color: white; }
+  #micBtn.active { background: var(--ok) !important; color: #0f1115; }
+  #pointerBtn.active { background: var(--accent) !important; }
+  #status { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 6px; }
+  #status.ok { color: var(--ok); }
+  #status.bad { color: var(--danger); }
+
+  #historyPanel {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: flex-end;
+    z-index: 60;
+  }
+  #historyPanel .sheet {
+    background: var(--card);
+    width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+    padding: 18px;
+  }
+  #historyPanel h2 { font-size: 1.1rem; margin-top: 0; }
+  #historyList div.entry {
+    padding: 10px 0;
+    border-bottom: 1px solid #262b36;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  #historyList div.entry b { color: var(--text); }
+  #historyClose {
+    width: 100%;
+    margin-top: 10px;
+    background: #262b36;
+    color: var(--text);
+  }
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #262b36;
+    color: var(--text);
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    max-width: 90%;
+    text-align: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+  <div id="toast"></div>
+
+  <div id="join">
+    <h1>Remote Support Viewer</h1>
+    <button id="installBtn" class="hidden" style="background:#262b36;color:var(--text);width:100%;max-width:320px;margin-bottom:16px;">📲 Install App</button>
+    <div id="iosTip" class="hidden">
+      <span>On iPhone: tap Share, then "Add to Home Screen".</span>
+      <button id="iosTipDismiss">Got it</button>
+    </div>
+    <p class="sub">Enter the code from the person you're helping.</p>
+    <input id="codeInput" placeholder="CODE" maxlength="8" />
+    <label style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:0.85rem;max-width:320px;margin-bottom:12px;">
+      <input type="checkbox" id="rememberCheck" checked> Remember this code on this device
+    </label>
+    <button class="btn-primary" id="connectBtn">Connect</button>
+    <button id="historyBtn" style="background:#262b36;color:var(--text);width:100%;max-width:320px;margin-top:10px;">🕑 Past Sessions</button>
+  </div>
+
+  <div id="viewArea" class="hidden">
+    <div id="status">Waiting for stream…</div>
+    <div id="remoteVideoWrap">
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+    <div id="controlBar">
+      <button data-cmd="screen">🖥️ Screen</button>
+      <button data-cmd="front">🤳 Front</button>
+      <button data-cmd="back">📷 Back</button>
+      <button id="micBtn">🎤 Mic</button>
+      <button id="pointerBtn">👆 Point</button>
+      <button id="reconnectBtn" class="hidden">🔄 Reconnect</button>
+      <button id="disconnectBtn">End</button>
+    </div>
+  </div>
+
+  <div id="historyPanel" class="hidden">
+    <div class="sheet">
+      <h2>Past Sessions</h2>
+      <div id="historyList"><p class="sub">No sessions yet.</p></div>
+      <button id="historyClose">Close</button>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-database-compat.js"></script>
+<script>
+  // === PASTE YOUR FIREBASE CONFIG HERE (same one used in monitor.html) ===
+  const firebaseConfig = {
+    apiKey: "AIzaSyDplr8vKCcDgDkUMopxchzwMRWXZHBopoA",
+    authDomain: "watch-b1d8f.firebaseapp.com",
+    databaseURL: "PASTE_YOUR_REALTIME_DATABASE_URL_HERE", // from Realtime Database page, e.g. https://watch-b1d8f-default-rtdb.firebaseio.com
+    projectId: "watch-b1d8f",
+    storageBucket: "watch-b1d8f.firebasestorage.app",
+    messagingSenderId: "971626937343",
+    appId: "1:971626937343:web:c3509d2e6645924515c5ca"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // ---------- toast (replaces alert()) ----------
+  let toastTimer = null;
+  function toast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+  }
+
+  // ---------- install prompt (Android/desktop) ----------
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('installBtn').classList.remove('hidden');
+  });
+  document.getElementById('installBtn').onclick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('installBtn').classList.add('hidden');
+  };
+  window.addEventListener('appinstalled', () => {
+    document.getElementById('installBtn').classList.add('hidden');
+  });
+
+  // ---------- iOS install fallback ----------
+  function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream; }
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  if (isIOS() && !isStandalone && !localStorage.getItem('rs_iosTipDismissed')) {
+    document.getElementById('iosTip').classList.remove('hidden');
+  }
+  document.getElementById('iosTipDismiss').onclick = () => {
+    localStorage.setItem('rs_iosTipDismissed', '1');
+    document.getElementById('iosTip').classList.add('hidden');
+  };
+
+  let sessionId, pc, micPc, micStream;
+  let pointerActive = false;
+  let sessionStartTime = null;
+
+  const servers = {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "turn:openrelay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+      { urls: "turn:openrelay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+      { urls: "turn:openrelay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" }
+    ]
+  };
+
+  // Prefill a remembered code, but connecting still requires tapping Connect,
+  // which still sends a visible request the other person has to accept.
+  const rememberedCode = localStorage.getItem('rs_sessionId');
+  if (rememberedCode) document.getElementById('codeInput').value = rememberedCode;
+
+  document.getElementById('connectBtn').onclick = async () => {
+    sessionId = document.getElementById('codeInput').value.trim().toUpperCase();
+    if (!sessionId) return toast('Enter a code first.');
+    if (document.getElementById('rememberCheck').checked) {
+      localStorage.setItem('rs_sessionId', sessionId);
+    }
+    // Send a visible request — this is what pops the accept/decline prompt
+    // on the other device. There's no way to skip this step.
+    await db.ref('sessions/' + sessionId + '/request').set({
+      pending: true,
+      from: 'Your helper',
+      time: Date.now()
+    });
+    sessionStartTime = Date.now();
+    document.getElementById('join').classList.add('hidden');
+    document.getElementById('viewArea').classList.remove('hidden');
+    setStatus('Request sent — waiting for them to accept…');
+    await connect();
+  };
+
+  function setStatus(text, cls) {
+    const el = document.getElementById('status');
+    el.textContent = text;
+    el.className = cls || '';
+  }
+
+  async function connect() {
+    pc = new RTCPeerConnection(servers);
+
+    pc.ontrack = (e) => {
+      document.getElementById('remoteVideo').srcObject = e.streams[0];
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        setStatus('Connected', 'ok');
+        document.getElementById('reconnectBtn').classList.add('hidden');
+      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        setStatus('Connection lost', 'bad');
+        document.getElementById('reconnectBtn').classList.remove('hidden');
+      } else {
+        setStatus(pc.connectionState);
+      }
+    };
+
+    const calleeCandidates = db.ref('sessions/' + sessionId + '/calleeCandidates');
+    pc.onicecandidate = (e) => {
+      if (e.candidate) calleeCandidates.push(e.candidate.toJSON());
+    };
+
+    db.ref('sessions/' + sessionId + '/offer').on('value', async (snap) => {
+      const offer = snap.val();
+      if (offer && (!pc.currentRemoteDescription || pc.signalingState === 'stable') ) {
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await db.ref('sessions/' + sessionId).update({
+            answer: { type: answer.type, sdp: answer.sdp }
+          });
+        } catch (err) { console.log(err); }
+      }
+    });
+
+    db.ref('sessions/' + sessionId + '/callerCandidates').on('child_added', (snap) => {
+      pc.addIceCandidate(new RTCIceCandidate(snap.val())).catch(()=>{});
+    });
+  }
+
+  document.getElementById('reconnectBtn').onclick = async () => {
+    if (pc) pc.close();
+    setStatus('Reconnecting…');
+    await connect();
+  };
+
+  document.querySelectorAll('#controlBar button[data-cmd]').forEach(btn => {
+    btn.onclick = () => db.ref('sessions/' + sessionId + '/control').set(btn.dataset.cmd);
+  });
+
+  // ---------- two-way audio: send your mic to them ----------
+  document.getElementById('micBtn').onclick = async () => {
+    const btn = document.getElementById('micBtn');
+    if (micPc) {
+      // turn mic off
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      micPc.close();
+      micPc = null;
+      btn.classList.remove('active');
+      db.ref('sessions/' + sessionId + '/mic').remove();
+      return;
+    }
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) { return toast('Could not access your mic: ' + err.message); }
+    micPc = new RTCPeerConnection(servers);
+    micStream.getTracks().forEach(t => micPc.addTrack(t, micStream));
+    micPc.onicecandidate = (e) => {
+      if (e.candidate) db.ref('sessions/' + sessionId + '/mic/callerCandidates').push(e.candidate.toJSON());
+    };
+    const offer = await micPc.createOffer();
+    await micPc.setLocalDescription(offer);
+    await db.ref('sessions/' + sessionId + '/mic').set({ offer: { type: offer.type, sdp: offer.sdp } });
+    db.ref('sessions/' + sessionId + '/mic/answer').on('value', async (snap) => {
+      const data = snap.val();
+      if (data && micPc && micPc.signalingState !== 'stable') {
+        await micPc.setRemoteDescription(new RTCSessionDescription(data));
+      }
+    });
+    db.ref('sessions/' + sessionId + '/mic/calleeCandidates').on('child_added', (c) => {
+      if (micPc) micPc.addIceCandidate(new RTCIceCandidate(c.val())).catch(()=>{});
+    });
+    btn.classList.add('active');
+  };
+
+  // ---------- pointer: tap/drag on the video to show a highlight on their preview ----------
+  // This only overlays on their small local preview box — a web page can't
+  // draw on top of the rest of their desktop/apps.
+  const pointerBtn = document.getElementById('pointerBtn');
+  const videoWrap = document.getElementById('remoteVideoWrap');
+  pointerBtn.onclick = () => {
+    pointerActive = !pointerActive;
+    pointerBtn.classList.toggle('active', pointerActive);
+    if (!pointerActive) db.ref('sessions/' + sessionId + '/pointer').set({ active: false });
+  };
+  function sendPointer(clientX, clientY) {
+    if (!pointerActive || !sessionId) return;
+    const rect = videoWrap.getBoundingClientRect();
+    const x = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+    const y = Math.min(Math.max((clientY - rect.top) / rect.height, 0), 1);
+    db.ref('sessions/' + sessionId + '/pointer').set({ active: true, x, y });
+  }
+  videoWrap.addEventListener('mousemove', (e) => sendPointer(e.clientX, e.clientY));
+  videoWrap.addEventListener('touchmove', (e) => {
+    if (e.touches[0]) sendPointer(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+
+  // ---------- session history ----------
+  function logHistory() {
+    if (!sessionId || !sessionStartTime) return;
+    const durationSec = Math.round((Date.now() - sessionStartTime) / 1000);
+    db.ref('history').push({ sessionId, endedAt: Date.now(), durationSec });
+  }
+  document.getElementById('historyBtn').onclick = () => {
+    document.getElementById('historyPanel').classList.remove('hidden');
+    db.ref('history').limitToLast(15).once('value', (snap) => {
+      const data = snap.val();
+      const list = document.getElementById('historyList');
+      if (!data) { list.innerHTML = '<p class="sub">No sessions yet.</p>'; return; }
+      const entries = Object.values(data).sort((a,b) => b.endedAt - a.endedAt);
+      list.innerHTML = entries.map(e => {
+        const d = new Date(e.endedAt);
+        const mins = Math.floor(e.durationSec / 60);
+        const secs = e.durationSec % 60;
+        return `<div class="entry"><b>${e.sessionId}</b> — ${d.toLocaleString()} (${mins}m ${secs}s)</div>`;
+      }).join('');
+    });
+  };
+  document.getElementById('historyClose').onclick = () => {
+    document.getElementById('historyPanel').classList.add('hidden');
+  };
+
+  document.getElementById('disconnectBtn').onclick = () => {
+    logHistory();
+    if (pc) pc.close();
+    if (micPc) micPc.close();
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+    if (sessionId) db.ref('sessions/' + sessionId).remove();
+    location.reload();
+  };
+</script>
+</body>
+</html>
