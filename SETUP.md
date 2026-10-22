@@ -2,7 +2,7 @@
 
 Two pages:
 - **monitor.html** — opened by the person you're helping. Lets them share their screen, front camera, or back camera (with mic audio). Always shows a red "you are sharing" banner with a Stop button, and cleans itself up automatically if the tab closes.
-- **viewer.html** — opened by you (works great on a phone; installable via the Install App button). Lets you watch the stream, send your own mic audio, point at things on their preview, and see past session history.
+- **index.html** — opened by you (works great on a phone; installable via the Install App button). Lets you watch the stream, send your own mic audio, point at things on their preview, and see past session history.
 
 They connect to each other using a Firebase Realtime Database as the "signaling" channel — it only passes connection setup info, not the actual video. The video/audio itself flows directly device-to-device over WebRTC.
 
@@ -14,7 +14,7 @@ They connect to each other using a Firebase Realtime Database as the "signaling"
 
 ## 2. Paste your config into both files
 
-Open `monitor.html` and `viewer.html`, and replace the `firebaseConfig` object near the bottom of each with your project's config. It must be **identical in both files**, and `databaseURL` must be filled in (copy it from the top of the Realtime Database page — it's not included in the default config snippet Firebase shows you).
+Open `monitor.html` and `index.html`, and replace the `firebaseConfig` object near the bottom of each with your project's config. It must be **identical in both files**, and `databaseURL` must be filled in (copy it from the top of the Realtime Database page — it's not included in the default config snippet Firebase shows you).
 
 ## 3. Lock down the database rules
 
@@ -43,7 +43,7 @@ Click **Publish** — rules don't apply until you do. This is still fairly open 
 
 ## 4. Deploy
 
-All files are plain static assets — no build step. Push **all of them to the same folder**: `monitor.html`, `viewer.html`, `manifest.json`, `manifest-monitor.json`, `icon.svg`, `sw.js`. Easiest options, same as your other projects:
+All files are plain static assets — no build step. Push **all of them to the same folder**: `monitor.html`, `index.html`, `manifest.json`, `manifest-monitor.json`, `icon.svg`, `sw.js`. Easiest options, same as your other projects:
 
 - **GitHub Pages**: push the files to a repo, enable Pages in repo settings.
 - **Firebase Hosting**: `firebase init hosting`, drop the files in the public folder, `firebase deploy`.
@@ -55,7 +55,7 @@ Each page shows an **📲 Install App** button on Android/desktop Chrome (fires 
 ## 5. How a session works
 
 1. The person needing help opens `monitor.html`, taps **Create New Session**, gets a code, sends it to you once.
-2. You open `viewer.html`, enter the code, tap **Connect** — this sends a visible request to their screen.
+2. You open `index.html`, enter the code, tap **Connect** — this sends a visible request to their screen.
 3. A popup appears on their device; they tap **Accept & Share Screen/Front/Back** (or Decline) — the browser's own permission prompt follows, so nothing starts silently.
 4. If you both tick "remember this device," future sessions skip typing the code — but the accept popup still always appears on their end before anything shares.
 5. While connected: tap **🎤 Mic** on the viewer to send your voice to them; tap **👆 Point** then move your finger/cursor over the video to highlight something on their local preview (it can't draw over their other apps — no browser page can do that).
